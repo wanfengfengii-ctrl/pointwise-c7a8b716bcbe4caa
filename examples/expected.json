@@ -1,0 +1,15 @@
+{
+  "nodes": [["0", "0"], ["2", "1"]],
+  "first": {
+    "sample_id": "strip-center",
+    "bias": "1/2",
+    "corrected_thickness": "19/2",
+    "disposition": "pass"
+  },
+  "after_amendment": {
+    "sample_id": "strip-center",
+    "bias": "1",
+    "corrected_thickness": "9",
+    "disposition": "out_of_limits"
+  }
+}

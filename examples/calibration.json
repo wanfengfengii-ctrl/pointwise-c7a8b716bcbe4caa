@@ -1,0 +1,17 @@
+{
+  "fixture_id": "film-bench-a",
+  "gauge_id": "glass-g10",
+  "gauge_fixtures": ["film-bench-a"],
+  "unit": "μm",
+  "multiplier": "1",
+  "limits": ["19/2", "10"],
+  "rows": [
+    ["ref-zero", "μm", "0", "0", "0"],
+    ["ref-two", "μm", "2", "0", "1"],
+    ["ref-spare", "μm", "11", "2", "3"]
+  ],
+  "groups": [
+    ["steady", ["ref-zero", "ref-two"]],
+    ["spare", ["ref-spare"]]
+  ]
+}
