@@ -5,6 +5,7 @@ from protocol.fixtures import validate_fixture_id, validate_identifier
 from protocol.limits import ThicknessLimits
 from protocol.quantities import CANONICAL_UNIT, format_rational, parse_rational
 from release.curve import CurveNode, NominalCurve
+from release.v2_codec import V2StationPiece, decode_v2
 
 
 _ID_FIELDS = ('issuance_id', 'fixture_id', 'protocol_id', 'freeze_id', 'revision_id', 'group_id')
@@ -81,3 +82,16 @@ def decode_v1(raw: bytes) -> V1StationPiece:
         limits=ThicknessLimits(*_rational_pair(body['limits'])),
         curve=NominalCurve(tuple(CurveNode(*_rational_pair(node)) for node in body['nodes'])),
     )
+
+
+def decode_station_piece(raw: bytes) -> V1StationPiece | V2StationPiece:
+    """Decode either a V1 or a V2 station piece, rejecting anything else."""
+    if not isinstance(raw, bytes):
+        raise ValueError('station piece must be supplied as bytes')
+    try:
+        version = json.loads(raw.decode('utf-8')).get('version')
+    except (ValueError, AttributeError, RecursionError) as error:
+        raise ValueError('invalid station piece encoding') from error
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError('unsupported station piece version')
+    return decode_v1(raw) if version == 1 else decode_v2(raw)

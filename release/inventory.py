@@ -3,14 +3,15 @@ import sqlite3
 from uuid import uuid4
 
 from protocol.fixtures import validate_identifier
-from release.codec import V1StationPiece, decode_v1
+from release.codec import V1StationPiece, decode_station_piece
+from release.v2_codec import V2StationPiece
 
 
 @dataclass(frozen=True)
 class AcceptedPiece:
     acceptance_id: str
     original_bytes: bytes
-    piece: V1StationPiece
+    piece: V1StationPiece | V2StationPiece
 
 
 class AdmissionInventory:
@@ -48,7 +49,7 @@ class AdmissionInventory:
         if row is None:
             raise KeyError(acceptance_id)
         issuance_id, raw = row
-        piece = decode_v1(raw)
+        piece = decode_station_piece(raw)
         if piece.issuance_id != issuance_id:
             raise ValueError('stored issuance identity does not match the station piece')
         return AcceptedPiece(acceptance_id, raw, piece)

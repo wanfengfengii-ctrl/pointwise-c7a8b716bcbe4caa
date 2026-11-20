@@ -45,7 +45,13 @@ class LabTestCase(unittest.TestCase):
 def archive_snapshot(connection):
     reports = connection.execute('SELECT * FROM review_reports ORDER BY report_id').fetchall()
     receipts = connection.execute('SELECT * FROM review_receipts ORDER BY report_id').fetchall()
-    return reports, receipts
+    correction_reports = connection.execute(
+        'SELECT * FROM correction_reports ORDER BY report_id'
+    ).fetchall()
+    correction_receipts = connection.execute(
+        'SELECT * FROM correction_receipts ORDER BY report_id'
+    ).fetchall()
+    return reports, receipts, correction_reports, correction_receipts
 
 
 def arm_commit_failure(connection):
@@ -66,4 +72,25 @@ def disarm_commit_failure(connection):
         DROP TRIGGER test_guard_new_receipt;
         DROP TABLE test_receipt_guard;
         DROP TABLE test_receipt_parent;
+    ''')
+
+
+def arm_correction_commit_failure(connection):
+    connection.executescript('''
+        CREATE TABLE test_correction_parent (id TEXT PRIMARY KEY);
+        CREATE TABLE test_correction_guard (
+            id TEXT REFERENCES test_correction_parent(id) DEFERRABLE INITIALLY DEFERRED
+        );
+        CREATE TRIGGER test_guard_new_correction AFTER INSERT ON correction_receipts
+        BEGIN
+            INSERT INTO test_correction_guard VALUES (NEW.receipt_id);
+        END;
+    ''')
+
+
+def disarm_correction_commit_failure(connection):
+    connection.executescript('''
+        DROP TRIGGER test_guard_new_correction;
+        DROP TABLE test_correction_guard;
+        DROP TABLE test_correction_parent;
     ''')

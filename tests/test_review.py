@@ -45,7 +45,7 @@ class ReviewTests(LabTestCase):
             with self.subTest(batch=batch):
                 with self.assertRaises(ValueError):
                     sign_review(self.inventory, self.storage, batch)
-        self.assertEqual(archive_snapshot(self.app), ([], []))
+        self.assertEqual(archive_snapshot(self.app), ([], [], [], []))
 
     def test_exact_fraction(self):
         acceptance_id = self.accept_offline(
@@ -128,7 +128,8 @@ class ReviewTests(LabTestCase):
         report, receipt = sign_review(self.inventory, self.storage, batch)
         self.assertNotEqual(existing.report_id, report.report_id)
         self.assertEqual(report.results, existing.results)
-        reports, receipts = archive_snapshot(self.app)
+        reports, receipts, correction_reports, correction_receipts = archive_snapshot(self.app)
         self.assertEqual((len(reports), len(receipts)), (2, 2))
+        self.assertEqual((len(correction_reports), len(correction_receipts)), (0, 0))
         retrieved = retrieve_report(self.storage, report.report_id)
         self.assertEqual((retrieved.report, retrieved.receipt), (report, receipt))

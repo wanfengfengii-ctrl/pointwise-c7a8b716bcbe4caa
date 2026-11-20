@@ -22,6 +22,19 @@ class ArchiveStorage:
                 receipt_id TEXT NOT NULL UNIQUE
             )
         ''')
+        self.connection.execute('''
+            CREATE TABLE IF NOT EXISTS correction_reports (
+                report_id TEXT PRIMARY KEY NOT NULL,
+                body TEXT NOT NULL,
+                piece_bytes BLOB NOT NULL
+            )
+        ''')
+        self.connection.execute('''
+            CREATE TABLE IF NOT EXISTS correction_receipts (
+                report_id TEXT PRIMARY KEY NOT NULL REFERENCES correction_reports(report_id),
+                receipt_id TEXT NOT NULL UNIQUE
+            )
+        ''')
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:

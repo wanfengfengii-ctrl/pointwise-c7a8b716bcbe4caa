@@ -4,9 +4,9 @@ from pathlib import Path
 import sqlite3
 from tempfile import TemporaryDirectory
 
-from application.review import sign_review
+from application.review import lookup_correction, sign_correction, sign_review
 from application.samples import ReviewBatch, SampleInput
-from archive.history import retrieve_report
+from archive.history import retrieve_correction, retrieve_report
 from archive.storage import ArchiveStorage
 from measurement.amendments import amend_trial_row, submit_trial_revision
 from measurement.freezes import freeze_revision
@@ -20,7 +20,7 @@ from protocol.quantities import UnitConversion
 from protocol.revisions import ProtocolStore
 from release.admission import admit_station_piece
 from release.inventory import AdmissionInventory
-from release.issue import issue_v1_station_piece
+from release.issue import issue_v1_station_piece, issue_v2_station_piece
 
 
 def load_example(filename):
@@ -71,6 +71,70 @@ def result_summary(report):
         'corrected_thickness': None if result.corrected_thickness is None else str(result.corrected_thickness),
         'disposition': result.disposition.value,
     }
+
+
+def run_correction_demo(directory):
+    """Issue a V2 piece, sign with the source closed, look up from the body only."""
+    from fractions import Fraction
+
+    from examples.correction_fixture import POINT_OVERLAP, seed_case
+
+    source_path = Path(directory) / 'correction-source.sqlite3'
+    app_path = Path(directory) / 'correction-application.sqlite3'
+    with closing(sqlite3.connect(source_path)) as source:
+        protocols, ledger = initialize_source(source)
+        _, _, freeze_id = seed_case(protocols, ledger, POINT_OVERLAP)
+        v2_raw = issue_v2_station_piece(ledger, protocols, freeze_id)
+        if issue_v2_station_piece(ledger, protocols, freeze_id) != v2_raw:
+            raise RuntimeError('V2 issuance is not deterministic')
+
+    with closing(sqlite3.connect(app_path)) as offline:
+        inventory, storage = initialize_application(offline)
+        acceptance_id = admit_station_piece(inventory, v2_raw)
+        # Re-admitting the identical bytes returns the first acceptance id.
+        if admit_station_piece(inventory, v2_raw) != acceptance_id:
+            raise RuntimeError('V2 re-admission changed the acceptance id')
+        # The calibration source stays closed while the night shift signs.
+        body, receipt = sign_correction(
+            inventory, storage, acceptance_id, (0, 1), (0, 3), Fraction(1, 2),
+        )
+        offline_lookups = {
+            str(reading): list(lookup_correction(body, reading))
+            for reading in (Fraction(0), Fraction(1, 2), Fraction(1))
+        }
+        report_id = body['report_id']
+
+    with closing(sqlite3.connect(app_path)) as offline:
+        _, storage = initialize_application(offline)
+        reloaded_body, reloaded_receipt = retrieve_correction(storage, report_id)
+        if reloaded_body != body or reloaded_receipt != receipt:
+            raise RuntimeError('reopened storage did not return the fixed correction table')
+
+    expected_lookups = {
+        '0': ['uncorrectable', None],
+        '1/2': ['correctable', '3/2'],
+        '1': ['correctable', '3/2'],
+    }
+    normalized = {
+        reading: [state, None if correction is None else str(correction)]
+        for reading, (state, correction) in offline_lookups.items()
+    }
+    if normalized != expected_lookups:
+        raise RuntimeError('correction lookups disagree with the hand calculation')
+    print('POINTWISE_SCENARIO ' + json.dumps({
+        'case_id': 'T10.source-closed-correction',
+        'input': {'case': 'POINT_OVERLAP', 'window': ['0', '1'],
+                  'limits': ['0', '3'], 'tolerance': '1/2'},
+        'expected': expected_lookups,
+        'actual': normalized,
+        'segments': body['segments'],
+        'reopen_intact': reloaded_body == body and reloaded_receipt == receipt,
+        'code_paths': ['release/hull.py', 'release/issue.py', 'release/v2_codec.py',
+                       'application/correction.py', 'application/review.py', 'archive/history.py'],
+        'oracle': 'Reading 0 carries biases 0 and 2, no shared correction fits tolerance 1/2; '
+                  'the hot-only interval (0, 1] takes the constant correction 3/2.',
+    }, ensure_ascii=False, sort_keys=True))
+    return 0
 
 
 def main():
@@ -139,6 +203,7 @@ def main():
                                'application/interpolate.py', 'application/review.py', 'archive/history.py'],
                 'oracle': 'At reference 1 the endpoint midpoint biases are 1/2 and 1. Subtract from 10 and compare to [19/2, 10]. Compare both reloaded bundles to the captured first signatures and issued bytes.',
             }, ensure_ascii=False, sort_keys=True))
+        run_correction_demo(directory)
     return 0
 
 
